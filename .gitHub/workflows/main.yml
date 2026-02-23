@@ -1,18 +1,25 @@
 name: Video Bot Run
 
 on:
+  workflow_dispatch:
   push:
     branches: [ main ]
-  workflow_dispatch:
 
 jobs:
   run-bot:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-python@v4
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
         with:
           python-version: '3.9'
-      - run: pip install pyrogram tgcrypto yt-dlp
-      - run: python Bot.py
-      
+
+      - name: Install Dependencies
+        run: pip install pyrogram tgcrypto yt-dlp
+
+      - name: Run Bot
+        run: python Bot.py
+        
