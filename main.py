@@ -1,14 +1,15 @@
 import os
 import asyncio
+import time
 from pyrogram import Client, filters
 from yt_dlp import YoutubeDL
 
 # GitHub Secrets-ல் இருந்து தகவல்களை எடுக்கிறது
-API_ID = int(os.environ.get("API_ID"))
-API_HASH = os.environ.get("API_HASH")
-BOT_TOKEN = os.environ.get("BOT_TOKEN")
+API_ID = int(os.environ.get("API_ID", 0))
+API_HASH = os.environ.get("API_HASH", "")
+BOT_TOKEN = os.environ.get("BOT_TOKEN", "")
 
-# செஷன் கோப்பு சிக்கலைத் தவிர்க்க in_memory=True பயன்படுத்தப்படுகிறது
+# பாட் செட்டிங்ஸ்
 app = Client("my_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN, in_memory=True)
 
 @app.on_message(filters.regex(r'http'))
@@ -16,43 +17,50 @@ async def download_video(client, message):
     url = message.text
     status = await message.reply("⏳ **வீடியோ தயார் செய்யப்படுகிறது... கொஞ்சம் காத்திருங்கள்.**")
     
+    # தற்காலிக கோப்பு பெயர்
+    file_name = f"video_{int(time.time())}.mp4"
+    
     try:
-        # டவுன்லோட் செய்வதற்கான மேம்படுத்தப்பட்ட செட்டிங்ஸ்
+        # மேம்படுத்தப்பட்ட டவுன்லோட் செட்டிங்ஸ்
         ydl_opts = {
-            'outtmpl': 'video.mp4',
+            'outtmpl': file_name,
             'format': 'best',
             'quiet': True,
             'no_warnings': True,
             'nocheckcertificate': True,
             'geo_bypass': True,
-            # பிரவுசர் போல காட்ட இந்த User-Agent உதவும்
             'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-            # ஒருவேளை நீங்கள் cookies.txt சேர்த்தால் இது வேலை செய்யும்
-            'cookiefile': 'cookies.txt' if os.path.exists('cookies.txt') else None
+            'ignoreerrors': False,
+            'addheader': 'Accept-Language: en-US,en;q=0.9',
         }
         
-        # வீடியோவை டவுன்லோட் செய்கிறது
+        # cookies.txt இருந்தால் அதைச் சேர்த்துக் கொள்ளும்
+        if os.path.exists('cookies.txt'):
+            ydl_opts['cookiefile'] = 'cookies.txt'
+
+        # டவுன்லோட் செய்தல்
         with YoutubeDL(ydl_opts) as ydl:
             ydl.download([url])
             
-        # டெலிகிராமிற்கு வீடியோவை அனுப்புகிறது
-        await message.reply_video("video.mp4", caption="**Unga video ready! ✨**")
+        # வீடியோவை அனுப்புதல்
+        await message.reply_video(file_name, caption="**Unga video ready! ✨**")
         
-        # அனுப்பிய பிறகு சர்வரில் இருந்து வீடியோவை நீக்குகிறது
-        if os.path.exists("video.mp4"):
-            os.remove("video.mp4")
+        # சர்வரில் இருந்து வீடியோவை நீக்குதல்
+        if os.path.exists(file_name):
+            os.remove(file_name)
             
         await status.delete()
         
     except Exception as e:
-        # எரர் வந்தால் அதைத் தெரிவிக்கும்
         error_msg = str(e)
-        if "Sign in to confirm you're not a bot" in error_msg:
-            await status.edit("❌ **YouTube பிளாக் செய்துவிட்டது. இதற்கு 'cookies.txt' கட்டாயம் தேவை.**")
+        print(f"Error: {error_msg}") # GitHub logs-ல் பார்க்க உதவும்
+        
+        if "login required" in error_msg.lower() or "rate-limit" in error_msg.lower():
+            await status.edit("❌ **பிளாக் செய்யப்பட்டுள்ளது. இதற்கு 'cookies.txt' கொடுத்தால் மட்டுமே வேலை செய்யும்.**")
         elif "Cloudflare" in error_msg:
-            await status.edit("❌ **இந்த இணையதளம் பாதுகாப்பானது (Cloudflare), அதனால் டவுன்லோட் செய்ய முடியவில்லை.**")
+            await status.edit("❌ **Cloudflare பாதுகாப்பு இருப்பதால் இந்தத் தளத்தில் டவுன்லோட் செய்ய முடியாது.**")
         else:
-            await status.edit(f"❌ **தவறு நடந்துள்ளது:** `{error_msg[:100]}`")
+            await status.edit(f"❌ **தவறு:** `{error_msg[:100]}`")
 
 print("Bot is starting...")
 app.run()
